@@ -1,3 +1,3 @@
-./frontend/node_modules
-./backend/uploads
-./backend/hrinone.db
+frontend/node_modules/
+backend/uploads
+backend/hrinone.db
