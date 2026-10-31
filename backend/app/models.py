@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import JSON, Date, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -32,6 +32,16 @@ class Employee(Base):
     leaves: Mapped[list["LeaveRequest"]] = relationship(
         back_populates="employee", cascade="all, delete-orphan"
     )
+    trainings: Mapped[list["TrainingAssignment"]] = relationship(
+        back_populates="employee", cascade="all, delete-orphan"
+    )
+    performance: Mapped[list["EmployeePerformance"]] = relationship(cascade="all, delete-orphan")
+    documents: Mapped[list["DocumentRequest"]] = relationship(
+        back_populates="employee", cascade="all, delete-orphan"
+    )
+    questions: Mapped[list["HRQuestion"]] = relationship(
+        back_populates="employee", cascade="all, delete-orphan"
+    )
 
 
 class User(Base):
@@ -46,6 +56,7 @@ class User(Base):
     employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"))
 
     employee: Mapped[Employee | None] = relationship(back_populates="user")
+    notifications: Mapped[list["Notification"]] = relationship(cascade="all, delete-orphan")
 
 
 class LeaveRequest(Base):
@@ -104,3 +115,119 @@ class Application(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     job: Mapped[Job] = relationship(back_populates="applications")
+
+
+# ---------- performance (monthly KPI per team, objectives per person) ----------
+class PerformanceRecord(Base):
+    """One KPI figure per department per month, e.g. revenue achieved vs target."""
+
+    __tablename__ = "performance_records"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    department_id: Mapped[int] = mapped_column(ForeignKey("departments.id", ondelete="CASCADE"))
+    month: Mapped[str] = mapped_column(String(7))  # YYYY-MM
+    kpi: Mapped[str] = mapped_column(String(80))
+    target: Mapped[float] = mapped_column(Float)
+    achieved: Mapped[float] = mapped_column(Float)
+
+
+class EmployeePerformance(Base):
+    """Share of personal objectives reached in a month (0-100)."""
+
+    __tablename__ = "employee_performance"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"))
+    month: Mapped[str] = mapped_column(String(7))
+    score: Mapped[float] = mapped_column(Float)
+
+
+# ---------- training ----------
+class Course(Base):
+    __tablename__ = "courses"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str] = mapped_column(String(500), default="")
+    hours: Mapped[float] = mapped_column(Float, default=2)
+    mandatory: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    assignments: Mapped[list["TrainingAssignment"]] = relationship(
+        back_populates="course", cascade="all, delete-orphan"
+    )
+
+
+class TrainingAssignment(Base):
+    """status is stored as assigned / completed / missed. 'overdue' is derived (assigned + past due)."""
+
+    __tablename__ = "training_assignments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"))
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"))
+    status: Mapped[str] = mapped_column(String(20), default="assigned")
+    due_date: Mapped[date] = mapped_column(Date)
+    completed_at: Mapped[date | None] = mapped_column(Date)
+    last_reminded_at: Mapped[date | None] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    employee: Mapped[Employee] = relationship(back_populates="trainings")
+    course: Mapped[Course] = relationship(back_populates="assignments")
+
+
+# ---------- notifications ----------
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(120))
+    body: Mapped[str] = mapped_column(String(400), default="")
+    kind: Mapped[str] = mapped_column(String(30), default="info")
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+# ---------- HR assistant ----------
+class KnowledgeDoc(Base):
+    """Company documents (policies, procedures) the assistant answers from."""
+
+    __tablename__ = "knowledge_docs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(120))
+    category: Mapped[str] = mapped_column(String(60), default="General")
+    keywords: Mapped[str] = mapped_column(String(300), default="")  # extra search words (FR / darija / synonyms)
+    content: Mapped[str] = mapped_column(Text)
+
+
+class DocumentRequest(Base):
+    """An administrative document an employee asked for. status: ready | pending | rejected."""
+
+    __tablename__ = "document_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"))
+    doc_type: Mapped[str] = mapped_column(String(30))
+    purpose: Mapped[str] = mapped_column(String(200), default="")
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    details: Mapped[dict] = mapped_column(JSON, default=dict)
+    note: Mapped[str] = mapped_column(String(300), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    employee: Mapped[Employee] = relationship(back_populates="documents")
+
+
+class HRQuestion(Base):
+    """A question the assistant could not answer, forwarded to HR by the employee."""
+
+    __tablename__ = "hr_questions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"))
+    question: Mapped[str] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(20), default="open")
+    answer: Mapped[str] = mapped_column(String(1000), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    employee: Mapped[Employee] = relationship(back_populates="questions")

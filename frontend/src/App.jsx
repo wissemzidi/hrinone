@@ -1,22 +1,36 @@
 import { useEffect, useState } from 'react'
 import { api, auth, setUnauthorizedHandler } from './api.js'
+import Icon from './components/icons.jsx'
+import NotificationBell from './components/NotificationBell.jsx'
 import { Brand } from './components/ui.jsx'
 import Careers from './pages/Careers.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Employees from './pages/Employees.jsx'
+import Assistant from './pages/Assistant.jsx'
 import Leaves from './pages/Leaves.jsx'
 import Login from './pages/Login.jsx'
 import MyLeaves from './pages/MyLeaves.jsx'
+import MyTraining from './pages/MyTraining.jsx'
+import Performance from './pages/Performance.jsx'
 import Recruiting from './pages/Recruiting.jsx'
+import Requests from './pages/Requests.jsx'
+import Training from './pages/Training.jsx'
 import { fullName } from './utils.js'
 
 const ADMIN_PAGES = [
-  { id: 'dashboard', label: 'Today', icon: '◫', Component: Dashboard },
-  { id: 'employees', label: 'People', icon: '♙', Component: Employees },
-  { id: 'leaves', label: 'Time off', icon: '▦', Component: Leaves },
-  { id: 'recruiting', label: 'Recruiting', icon: '✧', Component: Recruiting },
+  { id: 'dashboard', label: 'Today', icon: 'today', Component: Dashboard },
+  { id: 'performance', label: 'Performance', icon: 'performance', Component: Performance },
+  { id: 'employees', label: 'People', icon: 'people', Component: Employees },
+  { id: 'leaves', label: 'Time off', icon: 'calendar', Component: Leaves },
+  { id: 'training', label: 'Training', icon: 'training', Component: Training },
+  { id: 'recruiting', label: 'Recruiting', icon: 'briefcase', Component: Recruiting },
+  { id: 'requests', label: 'Requests', icon: 'inbox', Component: Requests },
 ]
-const EMPLOYEE_PAGES = [{ id: 'mine', label: 'My time off', icon: '▦', Component: MyLeaves }]
+const EMPLOYEE_PAGES = [
+  { id: 'mine', label: 'My time off', icon: 'calendar', Component: MyLeaves },
+  { id: 'training', label: 'My training', icon: 'training', Component: MyTraining },
+  { id: 'assistant', label: 'HR assistant', icon: 'chat', Component: Assistant },
+]
 
 export default function App() {
   const [user, setUser] = useState(null)
@@ -76,8 +90,7 @@ export default function App() {
   return (
     <div className="shell">
       <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
-        <Brand />
-        <div className="nav-label">WORKSPACE</div>
+        <Brand tagline />
         <nav aria-label="Main">
           {pages.map((p) => (
             <button
@@ -86,8 +99,8 @@ export default function App() {
               aria-current={p.id === current.id ? 'page' : undefined}
               onClick={() => goTo(p.id)}
             >
-              <span className="nav-icon" aria-hidden="true">
-                {p.icon}
+              <span className="nav-icon">
+                <Icon name={p.icon} />
               </span>
               {p.label}
             </button>
@@ -116,12 +129,13 @@ export default function App() {
             ☰
           </button>
           <div className="breadcrumbs">
-            <span>Workspace</span>
-            <b>/</b>
             <strong>{current.label}</strong>
           </div>
-          <div className="top-avatar" aria-hidden="true">
-            {initials}
+          <div className="top-right">
+            <NotificationBell />
+            <div className="top-avatar" aria-hidden="true">
+              {initials}
+            </div>
           </div>
         </header>
         <main className="content">

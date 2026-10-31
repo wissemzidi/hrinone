@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { api, auth } from '../api.js'
-import { Brand, OrbArt } from '../components/ui.jsx'
+import { Brand } from '../components/ui.jsx'
 
 export default function Login({ onLogin, onCareers }) {
   const [email, setEmail] = useState('')
@@ -25,16 +25,15 @@ export default function Login({ onLogin, onCareers }) {
   return (
     <div className="login">
       <section className="login-side">
-        <Brand />
+        <Brand size="lg" />
         <div>
           <h1>People, time off and hiring in one place.</h1>
           <p>Every approval and every hiring decision stays with you.</p>
         </div>
-        <OrbArt />
       </section>
       <section className="login-main">
         <form className="form login-form" onSubmit={submit}>
-          <h2>Sign in</h2>
+          <h2>Sign in to HR1</h2>
           <label>
             Work email
             <input type="email" required autoFocus autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} />

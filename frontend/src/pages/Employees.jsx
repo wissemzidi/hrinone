@@ -122,6 +122,8 @@ export default function Employees() {
   if (dept) params.set('department_id', dept)
   const { data: people, error, loading, reload } = useApi(`/employees?${params}`)
   const { data: departments } = useApi('/departments')
+  const { data: training } = useApi('/training/overview')
+  const trainingById = Object.fromEntries((training?.people ?? []).map((t) => [t.employee_id, t]))
 
   const remove = async (p) => {
     if (!window.confirm(`Remove ${fullName(p)}? Their time-off history is deleted too.`)) return
@@ -173,6 +175,7 @@ export default function Employees() {
                 <th>Person</th>
                 <th>Department</th>
                 <th>Started</th>
+                <th>Trainings done</th>
                 <th>Status</th>
                 <th />
               </tr>
@@ -185,6 +188,17 @@ export default function Employees() {
                   </td>
                   <td>{p.department?.name ?? <span className="muted">None</span>}</td>
                   <td>{fmtDate(p.hire_date)}</td>
+                  <td>
+                    {trainingById[p.id] ? (
+                      <>
+                        <strong>{trainingById[p.id].completed}</strong>
+                        <span className="muted"> of {trainingById[p.id].total}</span>
+                        {trainingById[p.id].outstanding > 0 && <Badge tone="bad"> {trainingById[p.id].outstanding} late</Badge>}
+                      </>
+                    ) : (
+                      <span className="muted">None</span>
+                    )}
+                  </td>
                   <td>
                     <Badge tone={p.status === 'active' ? 'ok' : 'plain'}>
                       {p.status === 'active' ? 'Active' : 'Inactive'}

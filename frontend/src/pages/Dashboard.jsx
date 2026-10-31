@@ -1,5 +1,7 @@
 import { api } from '../api.js'
-import { Badge, Empty, Notice, OrbArt, Person } from '../components/ui.jsx'
+import CompanyHealth from '../components/CompanyHealth.jsx'
+import Icon from '../components/icons.jsx'
+import { Badge, Empty, Notice, Person } from '../components/ui.jsx'
 import { useApi } from '../hooks.js'
 import { LEAVE_TYPES, countDays, fmtDate, fmtRange } from '../utils.js'
 
@@ -20,9 +22,6 @@ export default function Dashboard({ goTo }) {
     <>
       <header className="page-head">
         <div>
-          <div className="eyebrow">
-            <span className="pulse" /> Your team today
-          </div>
           <h1>Who's out today</h1>
           <p className="muted">
             {data.out_today.length === 0
@@ -32,43 +31,29 @@ export default function Dashboard({ goTo }) {
         </div>
       </header>
 
-      <section className="hero-banner">
-        <div className="hero-content">
-          <h2>
-            Keep time off clear,
-            <br />
-            <em>and every decision yours.</em>
-          </h2>
-          <p>See who is away, approve requests and keep your team's calendar in order.</p>
-          <button className="btn btn-light" onClick={() => goTo('leaves')}>
-            Review time off →
-          </button>
-        </div>
-        <OrbArt />
-        <div className="hero-grid" />
-      </section>
+      <CompanyHealth goTo={goTo} />
 
-      <div className="stats-grid">
+      <div className="stats-grid" style={{ marginTop: 16 }}>
         <article className="stat-card">
-          <span className="stat-icon cyan" aria-hidden="true">♙</span>
+          <span className="stat-icon blue"><Icon name="people" size={18} /></span>
           <div className="stat-value">{data.active_employees}</div>
           <div className="stat-label">Active people</div>
           <small className="stat-note">Currently on the team</small>
         </article>
         <article className="stat-card">
-          <span className="stat-icon blue" aria-hidden="true">▦</span>
+          <span className="stat-icon slate"><Icon name="calendar" size={18} /></span>
           <div className="stat-value">{data.out_today.length}</div>
           <div className="stat-label">Away today</div>
           <small className="stat-note">Approved time off</small>
         </article>
         <article className="stat-card">
-          <span className="stat-icon violet" aria-hidden="true">◷</span>
+          <span className="stat-icon amber"><Icon name="clock" size={18} /></span>
           <div className="stat-value">{data.pending.length}</div>
           <div className="stat-label">Waiting for you</div>
           <small className="stat-note">Requests to decide</small>
         </article>
         <article className="stat-card">
-          <span className="stat-icon green" aria-hidden="true">◫</span>
+          <span className="stat-icon green"><Icon name="today" size={18} /></span>
           <div className="stat-value">{data.by_department.length}</div>
           <div className="stat-label">Departments</div>
           <small className="stat-note">Across the company</small>

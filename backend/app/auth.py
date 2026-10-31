@@ -54,3 +54,9 @@ def admin_only(user: models.User = Depends(current_user)) -> models.User:
     if user.role != "admin":
         raise HTTPException(403, "Only admins can do this")
     return user
+
+
+def employee_only(user: models.User = Depends(current_user)) -> models.User:
+    if user.role != "employee" or user.employee_id is None:
+        raise HTTPException(403, "This is for employees")
+    return user
