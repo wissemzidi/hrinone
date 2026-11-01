@@ -2,20 +2,44 @@ import hashlib
 import hmac
 import os
 import secrets
-from datetime import datetime, timedelta, timezone
-
-import jwt
+from datetime import datetime, timedelta
 from fastapi import Depends, HTTPException
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Request
 from sqlalchemy.orm import Session
 
 from . import models
 from .database import get_db
 
-# Set HRINONE_SECRET in the environment for anything beyond local development.
-SECRET = os.getenv("HRINONE_SECRET", "dev-only-secret-change-me")
-TOKEN_HOURS = 12
-bearer = HTTPBearer(auto_error=False)
+APP_ENV = os.getenv("HRINONE_ENV", "development").strip().lower()
+TOKEN_HOURS = int(os.getenv("HRINONE_TOKEN_HOURS", "4"))
+if not 1 <= TOKEN_HOURS <= 24:
+    raise RuntimeError("HRINONE_TOKEN_HOURS must be between 1 and 24")
+SESSION_COOKIE = "hrinone_session"
+CSRF_COOKIE = "hrinone_csrf"
+COOKIE_SECURE = APP_ENV == "production" or os.getenv("HRINONE_COOKIE_SECURE", "false").lower() == "true"
+
+def _digest(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+def create_session(user: models.User, request: Request, db: Session) -> tuple[str, str, datetime]:
+    token = secrets.token_urlsafe(48)
+    csrf = secrets.token_urlsafe(32)
+    expires = datetime.utcnow() + timedelta(hours=TOKEN_HOURS)
+    db.add(models.AuthSession(
+        user_id=user.id, token_hash=_digest(token), csrf_hash=_digest(csrf), expires_at=expires,
+        ip_address=request.client.host if request.client else "unknown",
+        user_agent=request.headers.get("user-agent", "")[:300],
+    ))
+    db.commit()
+    return token, csrf, expires
+
+def revoke_session(token: str | None, db: Session) -> None:
+    if not token:
+        return
+    session = db.query(models.AuthSession).filter_by(token_hash=_digest(token), revoked_at=None).first()
+    if session:
+        session.revoked_at = datetime.utcnow()
+        db.commit()
 
 
 def hash_password(password: str) -> str:
@@ -25,28 +49,28 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, stored: str) -> bool:
-    salt, digest = stored.split("$")
-    check = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), 200_000).hex()
-    return hmac.compare_digest(check, digest)
-
-
-def create_token(user: models.User) -> str:
-    exp = datetime.now(timezone.utc) + timedelta(hours=TOKEN_HOURS)
-    return jwt.encode({"sub": str(user.id), "role": user.role, "exp": exp}, SECRET, algorithm="HS256")
-
-
-def current_user(
-    creds: HTTPAuthorizationCredentials | None = Depends(bearer), db: Session = Depends(get_db)
-) -> models.User:
-    if not creds:
-        raise HTTPException(401, "Please sign in")
     try:
-        payload = jwt.decode(creds.credentials, SECRET, algorithms=["HS256"])
-    except jwt.PyJWTError:
+        salt, digest = stored.split("$", 1)
+        if len(salt) != 32 or len(digest) != 64:
+            return False
+        check = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), 200_000).hex()
+        return hmac.compare_digest(check, digest)
+    except (ValueError, TypeError):
+        return False
+
+
+def current_user(request: Request, db: Session = Depends(get_db)) -> models.User:
+    token = request.cookies.get(SESSION_COOKIE)
+    if not token:
+        raise HTTPException(401, "Please sign in")
+    session = db.query(models.AuthSession).filter_by(token_hash=_digest(token), revoked_at=None).first()
+    if not session or session.expires_at <= datetime.utcnow():
         raise HTTPException(401, "Your session has expired. Please sign in again")
-    user = db.get(models.User, int(payload["sub"]))
+    user = db.get(models.User, session.user_id)
     if not user:
         raise HTTPException(401, "Account no longer exists")
+    session.last_seen_at = datetime.utcnow()
+    db.commit()
     return user
 
 

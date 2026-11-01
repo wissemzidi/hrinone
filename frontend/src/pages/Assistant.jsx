@@ -31,7 +31,9 @@ export default function Assistant({ user }) {
   const { data: docs, reload: reloadDocs } = useApi('/documents/mine')
   const { data: questions, reload: reloadQuestions } = useApi('/assistant/mine')
 
-  useEffect(() => end.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), [messages])
+  useEffect(() => {
+    end.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [messages])
 
   const ask = async (text) => {
     const q = text.trim()
@@ -91,6 +93,7 @@ export default function Assistant({ user }) {
               <div key={i} className={`bubble ${m.role} ${m.error ? 'error' : ''}`}>
                 <p>{m.text}</p>
                 {m.sources?.length > 0 && <div className="muted tiny">Source: {m.sources.map((s) => s.title).join(', ')}</div>}
+                {m.ai && <div className="muted tiny">AI answer from company documents</div>}
                 {m.request?.status === 'ready' && (
                   <button className="btn btn-ok" onClick={() => download(m.request)}>Download {m.request.label.toLowerCase()}</button>
                 )}

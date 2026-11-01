@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from .. import kb, llm, models
+from .. import kb, llm, models, rag_agent
 from ..auth import admin_only, employee_only
 from ..calc import effective_status
 from ..database import get_db
@@ -93,6 +93,13 @@ def ask(data: AskIn, db: Session = Depends(get_db), user: models.User = Depends(
 
     docs = [{"id": d.id, "title": d.title, "keywords": d.keywords, "content": d.content}
             for d in db.scalars(select(models.KnowledgeDoc))]
+    # Agentic RAG (LangGraph + Gemini): searches, grades, rewrites the query if needed, then answers.
+    agent = rag_agent.run(question, docs)
+    if agent:
+        return _reply(agent["answer"], "knowledge", sources=agent["sources"], ai_powered=True,
+                      can_escalate=agent["can_escalate"])
+
+    # Fallback: offline keyword search (no key, packages missing, or the agent failed).
     hits = kb.search(question, docs)
     if not hits:
         return _reply("I couldn't find this in the company documents. I don't want to guess. "

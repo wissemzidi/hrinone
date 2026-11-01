@@ -65,6 +65,58 @@ function ApplicationDetail({ app, onClose, onChanged }) {
   )
 }
 
+
+function HRUploadForm({ jobs, onClose, onSaved }) {
+  const [form, setForm] = useState({ job_id: '', candidate_name: '', candidate_email: '', cover_note: '' })
+  const [file, setFile] = useState(null)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const set = (key) => (e) => setForm((old) => ({ ...old, [key]: e.target.value }))
+
+  const submit = async (e) => {
+    e.preventDefault()
+    if (!file) return setError('Choose a CV file first.')
+    if (!form.job_id) return setError('Choose the job this candidate is applying for.')
+    setBusy(true)
+    setError('')
+    const body = new FormData()
+    Object.entries(form).forEach(([key, value]) => body.append(key, value))
+    body.append('cv', file)
+    try {
+      await api.post('/applications/upload', body)
+      onSaved()
+    } catch (err) {
+      setError(err.message || 'The CV could not be uploaded.')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal title="Add candidate CV" onClose={onClose}>
+      <form className="form" onSubmit={submit}>
+        <p className="muted small">Upload a CV received by email or another channel. It will be analysed against the selected role and added to Applications.</p>
+        <label>Job role
+          <select required value={form.job_id} onChange={set('job_id')}>
+            <option value="">Select a role</option>
+            {jobs.map((job) => <option key={job.id} value={job.id}>{job.title}</option>)}
+          </select>
+        </label>
+        <label>Candidate full name<input required maxLength={120} value={form.candidate_name} onChange={set('candidate_name')} /></label>
+        <label>Candidate email<input required type="email" value={form.candidate_email} onChange={set('candidate_email')} /></label>
+        <label>CV (PDF, DOCX or TXT, max 5 MB)
+          <input required type="file" accept=".pdf,.docx,.txt" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        </label>
+        <label>HR note (optional)<textarea rows={3} maxLength={1000} value={form.cover_note} onChange={set('cover_note')} /></label>
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <footer className="form-actions">
+          <button type="button" className="btn" onClick={onClose} disabled={busy}>Cancel</button>
+          <button className="btn btn-primary" disabled={busy || jobs.length === 0}>{busy ? 'Uploading and scoring…' : 'Upload CV & score'}</button>
+        </footer>
+      </form>
+    </Modal>
+  )
+}
+
 function JobForm({ job, onClose, onSaved }) {
   const [form, setForm] = useState(
     job
@@ -128,6 +180,7 @@ export default function Recruiting() {
   const [jobFilter, setJobFilter] = useState('')
   const [viewing, setViewing] = useState(null)
   const [editingJob, setEditingJob] = useState(null) // null | 'new' | job
+  const [uploadingCV, setUploadingCV] = useState(false)
 
   const apps = useApi(`/applications${jobFilter ? `?job_id=${jobFilter}` : ''}`)
   const jobs = useApi('/jobs/manage')
@@ -150,7 +203,10 @@ export default function Recruiting() {
           <h1>Recruiting</h1>
           <p className="muted">Applications are ranked by how well each CV fits the role.</p>
         </div>
-        {tab === 'roles' && <button className="btn btn-primary" onClick={() => setEditingJob('new')}>New role</button>}
+        <div className="actions">
+          {tab === 'applications' && <button className="btn btn-primary" onClick={() => setUploadingCV(true)}>Upload candidate CV</button>}
+          {tab === 'roles' && <button className="btn btn-primary" onClick={() => setEditingJob('new')}>New role</button>}
+        </div>
       </header>
 
       <div className="tabs" role="tablist">
@@ -170,8 +226,9 @@ export default function Recruiting() {
             </select>
           </div>
           {apps.error && <Notice error={apps.error} onRetry={apps.reload} />}
+          {jobs.data?.length === 0 && <Notice error="Create a job role first before uploading a candidate CV." />}
           {apps.data && apps.data.length === 0 && (
-            <Empty title="No applications yet">Candidates apply from the open roles page on the sign-in screen.</Empty>
+            <Empty title="No applications yet">Candidates can apply through Careers from the sign-in screen, or HR can upload a CV here using “Upload candidate CV”.</Empty>
           )}
           {apps.data && apps.data.length > 0 && (
             <div className="table-wrap">
@@ -232,6 +289,13 @@ export default function Recruiting() {
         </>
       )}
 
+      {uploadingCV && (
+        <HRUploadForm
+          jobs={(jobs.data ?? []).filter((job) => job.status === 'open')}
+          onClose={() => setUploadingCV(false)}
+          onSaved={() => { setUploadingCV(false); reloadAll() }}
+        />
+      )}
       {viewing && (
         <ApplicationDetail
           app={viewing}

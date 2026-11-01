@@ -58,7 +58,6 @@ class UserOut(ORM):
 
 
 class LoginOut(BaseModel):
-    token: str
     user: UserOut
 
 

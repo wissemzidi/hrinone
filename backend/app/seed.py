@@ -1,5 +1,6 @@
 """Fills an empty database with sample data and makes sure demo logins exist."""
 from datetime import date, timedelta
+import os
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -8,8 +9,15 @@ from . import models
 from .auth import hash_password
 from .calc import first_of_month_back, month_keys
 
-ADMIN_EMAIL, ADMIN_PASSWORD = "admin@hrinone.app", "admin123"
-EMPLOYEE_PASSWORD = "welcome123"
+# Demo credentials are intentionally limited to development. Production must supply
+# an explicit bootstrap admin password through the environment.
+IS_PRODUCTION = os.getenv("HRINONE_ENV", "development").lower() == "production"
+ADMIN_EMAIL = os.getenv("HRINONE_ADMIN_EMAIL", "admin@hrinone.app")
+ADMIN_PASSWORD = os.getenv("HRINONE_ADMIN_PASSWORD", "")
+EMPLOYEE_PASSWORD = os.getenv("HRINONE_DEMO_EMPLOYEE_PASSWORD", "")
+if not IS_PRODUCTION:
+    ADMIN_PASSWORD = ADMIN_PASSWORD or "admin123"
+    EMPLOYEE_PASSWORD = EMPLOYEE_PASSWORD or "welcome123"
 
 DEPARTMENTS = ["Engineering", "People & Culture", "Sales", "Finance", "Design"]
 
@@ -42,12 +50,15 @@ def seed(db: Session) -> None:
         _seed_people(db)
 
     # accounts: one admin, and a login for every employee that lacks one
-    if not db.scalar(select(models.User).where(models.User.email == ADMIN_EMAIL)):
+    if ADMIN_PASSWORD and not db.scalar(select(models.User).where(models.User.email == ADMIN_EMAIL)):
         db.add(models.User(email=ADMIN_EMAIL, password_hash=hash_password(ADMIN_PASSWORD), role="admin"))
-    shared_hash = hash_password(EMPLOYEE_PASSWORD)
-    for emp in db.scalars(select(models.Employee)).all():
-        if not emp.user:
-            emp.user = models.User(email=emp.email.lower(), password_hash=shared_hash, role="employee")
+    if EMPLOYEE_PASSWORD:
+        shared_hash = hash_password(EMPLOYEE_PASSWORD)
+        for emp in db.scalars(select(models.Employee)).all():
+            if not emp.user:
+                emp.user = models.User(email=emp.email.lower(), password_hash=shared_hash, role="employee")
+    if IS_PRODUCTION and not ADMIN_PASSWORD and not db.scalar(select(models.User).where(models.User.role == "admin")):
+        raise RuntimeError("Set HRINONE_ADMIN_EMAIL and HRINONE_ADMIN_PASSWORD to bootstrap the first production admin")
 
     if not db.scalar(select(models.Job.id).limit(1)):
         for title, dept, desc, skills, years in JOBS:

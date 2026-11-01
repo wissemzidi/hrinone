@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { api, auth } from '../api.js'
+import { api } from '../api.js'
 import { Brand } from '../components/ui.jsx'
 
 export default function Login({ onLogin, onCareers }) {
@@ -13,11 +13,18 @@ export default function Login({ onLogin, onCareers }) {
     setBusy(true)
     setError(null)
     try {
-      const { token, user } = await api.post('/auth/login', { email, password })
-      auth.set(token)
-      onLogin(user)
+      // Do not trust the login response alone: confirm that the browser stored
+      // and sends the HttpOnly session cookie before entering the application.
+      await api.post('/auth/login', { email, password })
+      const authenticatedUser = await api.get('/auth/me')
+      onLogin(authenticatedUser)
     } catch (err) {
-      setError(err.message)
+      const message = err?.message || 'Sign-in failed. Please try again.'
+      const sessionCheckFailed = /sign in|session has expired|401/i.test(message)
+      setError(sessionCheckFailed
+        ? 'Your credentials were accepted, but the browser did not send the session cookie. For local testing, run the backend with HRINONE_ENV=development and HRINONE_COOKIE_SECURE=false, then refresh the page.'
+        : message)
+    } finally {
       setBusy(false)
     }
   }

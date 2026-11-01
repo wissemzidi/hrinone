@@ -231,3 +231,36 @@ class HRQuestion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     employee: Mapped[Employee] = relationship(back_populates="questions")
+
+
+class AuthSession(Base):
+    """Opaque server-side login session; only a SHA-256 token digest is stored."""
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    csrf_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    ip_address: Mapped[str] = mapped_column(String(64), default="unknown")
+    user_agent: Mapped[str] = mapped_column(String(300), default="")
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class SecurityEvent(Base):
+    """Append-only security/audit events; never store passwords or tokens here."""
+    __tablename__ = "security_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    email: Mapped[str] = mapped_column(String(120), default="")
+    event_type: Mapped[str] = mapped_column(String(60), index=True)
+    method: Mapped[str] = mapped_column(String(10), default="")
+    path: Mapped[str] = mapped_column(String(240), default="")
+    status_code: Mapped[int] = mapped_column(default=0)
+    ip_address: Mapped[str] = mapped_column(String(64), default="unknown")
+    user_agent: Mapped[str] = mapped_column(String(300), default="")
+    details: Mapped[str] = mapped_column(String(300), default="")
