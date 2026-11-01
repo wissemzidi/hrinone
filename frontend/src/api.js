@@ -1,10 +1,6 @@
 const BASE = import.meta.env.VITE_API_URL;
-const TOKEN_KEY = "hrinone_token";
 
-// Get authentication token from localStorage
-function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
-}
+const CSRF_COOKIE = "hrinone_csrf";
 
 let onUnauthorized = null;
 
@@ -12,22 +8,30 @@ export const setUnauthorizedHandler = (fn) => {
   onUnauthorized = fn;
 };
 
+function getCsrfToken() {
+  const cookie = document.cookie
+    .split("; ")
+    .find((row) => row.startsWith(`${CSRF_COOKIE}=`));
+
+  return cookie ? decodeURIComponent(cookie.split("=")[1]) : null;
+}
+
 async function send(method, path, body) {
   const isForm = body instanceof FormData;
   const headers = {};
-
-  // Attach Bearer token
-  const token = getToken();
-
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
 
   if (body && !isForm) {
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(BASE + path, {
+  const unsafe = ["POST", "PUT", "PATCH", "DELETE"].includes(method);
+
+  if (unsafe && path !== "/auth/login") {
+    const csrf = getCsrfToken();
+    if (csrf) headers["X-CSRF-Token"] = csrf;
+  }
+
+  const res = await fetch(`${BASE}${path}`, {
     method,
     headers,
     credentials: "include",
@@ -39,21 +43,8 @@ async function send(method, path, body) {
       onUnauthorized?.();
     }
 
-    let message = `Request failed (${res.status})`;
-
-    try {
-      const data = await res.json();
-
-      if (typeof data.detail === "string") {
-        message = data.detail;
-      } else if (Array.isArray(data.detail)) {
-        message = data.detail.map((e) => e.msg).join(". ");
-      }
-    } catch {
-      // Keep generic error
-    }
-
-    throw new Error(message);
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.detail || `API error: ${res.status}`);
   }
 
   return res;
@@ -62,26 +53,10 @@ async function send(method, path, body) {
 const json = async (res) => (res.status === 204 ? null : res.json());
 
 export const api = {
-  get: async (path) => json(await send("GET", path)),
-
-  post: async (path, body) => json(await send("POST", path, body)),
-
-  put: async (path, body) => json(await send("PUT", path, body)),
-
-  patch: async (path, body) => json(await send("PATCH", path, body)),
-
-  del: async (path) => json(await send("DELETE", path)),
-
-  blob: async (path) => (await send("GET", path)).blob(),
+  get: (path) => send("GET", path).then(json),
+  post: (path, body) => send("POST", path, body).then(json),
+  put: (path, body) => send("PUT", path, body).then(json),
+  patch: (path, body) => send("PATCH", path, body).then(json),
+  del: (path) => send("DELETE", path).then(json),
+  blob: (path) => send("GET", path).then((res) => res.blob()),
 };
-
-// Optional helpers for managing authentication
-export const saveToken = (token) => {
-  localStorage.setItem(TOKEN_KEY, token);
-};
-
-export const removeToken = () => {
-  localStorage.removeItem(TOKEN_KEY);
-};
-
-export const getSavedToken = getToken;
