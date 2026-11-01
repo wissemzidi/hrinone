@@ -44,6 +44,7 @@ async def security_headers(request, call_next):
     return response
 
 
+@app.get("/")
 @app.get("/api/health")
 def health():
     return {"status": "ok", "ai": llm.provider()}
