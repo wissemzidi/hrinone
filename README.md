@@ -1,6 +1,8 @@
 # hrinone
 
-A small HR app with two roles.
+### A small HR app with two roles.
+
+<img alt="" src="./frontend/public/hrinone_banner.png" />
 
 - **Admin:** dashboard of who's out, people directory, approve or reject time off, recruiting (roles and ranked applications).
 - **Employee:** sign in and file vacation, sick or personal leave, then track the answer.
